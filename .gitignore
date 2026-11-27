@@ -8,7 +8,9 @@
 [Uu]ser[Ss]ettings/
 [Mm]emoryCaptures/
 [Rr]ecordings/
-Assets/Captures/
+.utmp/
+**/Assets/Captures/
+**/Assets/Captures.meta
 
 # Visual Studio / IDE files
 .vs/
@@ -29,17 +31,20 @@ Assets/Captures/
 *.opendb
 *.VC.db
 
-# Unity crash & build artifacts
+# Unity crash, log & build artifacts
 sysinfo.txt
+*.log
 *.apk
 *.aab
 *.unitypackage
 *.app
 crashlytics-build.properties
 
-# Blender backup files
+# Blender backup & Python cache files
 *.blend1
 *.blend2
+__pycache__/
+*.pyc
 
 # OS files
 .DS_Store
