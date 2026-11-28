@@ -2,8 +2,8 @@ using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
-/// Generates crisp procedural PBR textures, URP materials, and a synthwave night skybox
-/// so every surface has rich detail, reflections, and neon glow.
+/// Generates procedural wet-asphalt PBR textures, alternating cyan/magenta rumble curbs,
+/// neon-striped barrier walls, glowing skyscraper facades, and a synthwave night skybox.
 /// </summary>
 public static class CyberMaterialFactory
 {
@@ -13,6 +13,9 @@ public static class CyberMaterialFactory
 
     static Shader LitShader() =>
         Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Universal Render Pipeline/Simple Lit");
+
+    static Shader UnlitShader() =>
+        Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
 
     public static Material GetOrCreate(string key, System.Func<Material> builder)
     {
@@ -26,9 +29,9 @@ public static class CyberMaterialFactory
     public static Material CarBodyMat() => GetOrCreate("M_CarBody", () =>
     {
         var m = new Material(LitShader());
-        m.SetColor("_BaseColor", Palette.CarBody);
-        m.SetFloat("_Metallic", 0.85f);
-        m.SetFloat("_Smoothness", 0.86f);
+        m.SetColor("_BaseColor", new Color(0.10f, 0.13f, 0.22f, 1f));
+        m.SetFloat("_Metallic", 0.92f);
+        m.SetFloat("_Smoothness", 0.90f);
         return m;
     });
 
@@ -36,17 +39,17 @@ public static class CyberMaterialFactory
     {
         var m = new Material(LitShader());
         m.SetColor("_BaseColor", Palette.CarAccent);
-        m.SetFloat("_Metallic", 0.65f);
-        m.SetFloat("_Smoothness", 0.72f);
+        m.SetFloat("_Metallic", 0.72f);
+        m.SetFloat("_Smoothness", 0.78f);
         return m;
     });
 
     public static Material GlassCanopyMat() => GetOrCreate("M_GlassCanopy", () =>
     {
         var m = new Material(LitShader());
-        m.SetColor("_BaseColor", new Color(0.03f, 0.06f, 0.14f, 1f));
-        m.SetFloat("_Metallic", 0.4f);
-        m.SetFloat("_Smoothness", 0.96f);
+        m.SetColor("_BaseColor", new Color(0.02f, 0.05f, 0.12f, 1f));
+        m.SetFloat("_Metallic", 0.55f);
+        m.SetFloat("_Smoothness", 0.97f);
         return m;
     });
 
@@ -55,7 +58,7 @@ public static class CyberMaterialFactory
         var m = new Material(LitShader());
         m.SetColor("_BaseColor", Palette.TireRubber);
         m.SetFloat("_Metallic", 0.05f);
-        m.SetFloat("_Smoothness", 0.2f);
+        m.SetFloat("_Smoothness", 0.25f);
         return m;
     });
 
@@ -63,17 +66,8 @@ public static class CyberMaterialFactory
     {
         var m = new Material(LitShader());
         m.SetColor("_BaseColor", Palette.WheelRim);
-        m.SetFloat("_Metallic", 0.9f);
-        m.SetFloat("_Smoothness", 0.82f);
-        return m;
-    });
-
-    public static Material TrackBoundsMat() => GetOrCreate("M_TrackBounds", () =>
-    {
-        var m = new Material(LitShader());
-        m.SetColor("_BaseColor", Palette.BoundsMidnight);
-        m.SetFloat("_Metallic", 0.45f);
-        m.SetFloat("_Smoothness", 0.62f);
+        m.SetFloat("_Metallic", 0.92f);
+        m.SetFloat("_Smoothness", 0.85f);
         return m;
     });
 
@@ -82,31 +76,65 @@ public static class CyberMaterialFactory
         var m = new Material(LitShader());
         m.SetColor("_BaseColor", color);
         m.SetFloat("_Metallic", 0.1f);
-        m.SetFloat("_Smoothness", 0.5f);
+        m.SetFloat("_Smoothness", 0.6f);
         m.EnableKeyword("_EMISSION");
         m.SetColor("_EmissionColor", color * intensity);
         m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
         return m;
     });
 
-    public static Material NeonCyanMat() => EmissiveMat("M_NeonCyan", Palette.NeonCyan, 4.2f);
-    public static Material NeonMagentaMat() => EmissiveMat("M_NeonMagenta", Palette.NeonMagenta, 4.2f);
-    public static Material ScoreGoldMat() => EmissiveMat("M_ScoreGold", Palette.ScoreGold, 3.6f);
+    public static Material NeonCyanMat() => EmissiveMat("M_NeonCyan", Palette.NeonCyan, 4.8f);
+    public static Material NeonMagentaMat() => EmissiveMat("M_NeonMagenta", Palette.NeonMagenta, 4.8f);
+    public static Material ScoreGoldMat() => EmissiveMat("M_ScoreGold", Palette.ScoreGold, 4.0f);
 
+    /// <summary>
+    /// Wet mirror-slick dark asphalt with subtle puddle streaks & glowing lane lines.
+    /// </summary>
     public static Material RoadAsphaltMat() => GetOrCreate("M_RoadAsphalt", () =>
     {
-        var tex = GenerateRoadTexture(512, 512);
+        var tex = GenerateRoadTexture(512, 512, out var emTex);
         var m = new Material(LitShader());
         m.SetTexture("_BaseMap", tex);
         m.SetColor("_BaseColor", Color.white);
-        m.SetFloat("_Metallic", 0.15f);
-        m.SetFloat("_Smoothness", 0.72f);
-
-        // Subtle emissive lane stripes
-        var emTex = GenerateRoadEmissionTexture(512, 512);
+        m.SetFloat("_Metallic", 0.28f);
+        m.SetFloat("_Smoothness", 0.91f); // wet mirror reflections!
         m.EnableKeyword("_EMISSION");
         m.SetTexture("_EmissionMap", emTex);
-        m.SetColor("_EmissionColor", Color.white * 1.4f);
+        m.SetColor("_EmissionColor", Color.white * 1.8f);
+        return m;
+    });
+
+    /// <summary>
+    /// Alternating Electric Cyan & Hot Magenta rumble-strip curbs.
+    /// </summary>
+    public static Material NeonRumbleCurbMat(bool flipOrder = false) => GetOrCreate($"M_RumbleCurb_{flipOrder}", () =>
+    {
+        var tex = GenerateRumbleCurbTexture(128, 256, flipOrder);
+        var m = new Material(LitShader());
+        m.SetTexture("_BaseMap", tex);
+        m.SetColor("_BaseColor", Color.white);
+        m.SetFloat("_Metallic", 0.2f);
+        m.SetFloat("_Smoothness", 0.7f);
+        m.EnableKeyword("_EMISSION");
+        m.SetTexture("_EmissionMap", tex);
+        m.SetColor("_EmissionColor", Color.white * 3.2f);
+        return m;
+    });
+
+    /// <summary>
+    /// Dark metallic track barrier walls with dual horizontal neon light rails.
+    /// </summary>
+    public static Material TrackBarriersMat() => GetOrCreate("M_TrackBarriers", () =>
+    {
+        var tex = GenerateBarrierTexture(256, 256, out var emTex);
+        var m = new Material(LitShader());
+        m.SetTexture("_BaseMap", tex);
+        m.SetColor("_BaseColor", Color.white);
+        m.SetFloat("_Metallic", 0.65f);
+        m.SetFloat("_Smoothness", 0.82f);
+        m.EnableKeyword("_EMISSION");
+        m.SetTexture("_EmissionMap", emTex);
+        m.SetColor("_EmissionColor", Color.white * 3.8f);
         return m;
     });
 
@@ -116,28 +144,29 @@ public static class CyberMaterialFactory
         var m = new Material(LitShader());
         m.SetTexture("_BaseMap", tex);
         m.SetColor("_BaseColor", Color.white);
-        m.SetFloat("_Metallic", 0.35f);
-        m.SetFloat("_Smoothness", 0.78f);
+        m.SetFloat("_Metallic", 0.45f);
+        m.SetFloat("_Smoothness", 0.85f);
         m.EnableKeyword("_EMISSION");
         m.SetTexture("_EmissionMap", tex);
-        m.SetColor("_EmissionColor", new Color(0.25f, 0.7f, 1.0f) * 1.1f);
-        m.mainTextureScale = new Vector2(90f, 90f);
+        m.SetColor("_EmissionColor", new Color(0.25f, 0.75f, 1.0f) * 1.15f);
+        m.mainTextureScale = new Vector2(110f, 110f);
         return m;
     });
 
-    public static Material BuildingFacadeMat(int variant) => GetOrCreate($"M_Building_{variant}", () =>
+    public static Material BuildingFacadeMat(int variant) => GetOrCreate($"M_Building_{variant % 6}", () =>
     {
-        Color winCol = (variant % 3 == 0) ? Palette.NeonCyan :
-                       (variant % 3 == 1) ? Palette.NeonMagenta : Palette.ScoreGold;
-        var tex = GenerateBuildingTexture(256, 512, winCol, variant * 17 + 5, out var emTex);
+        int v = variant % 6;
+        Color primary = (v % 2 == 0) ? Palette.NeonCyan : Palette.NeonMagenta;
+        Color secondary = (v % 2 == 0) ? Palette.NeonMagenta : Palette.NeonCyan;
+        var tex = GenerateBuildingTexture(256, 512, primary, secondary, v * 31 + 7, out var emTex);
         var m = new Material(LitShader());
         m.SetTexture("_BaseMap", tex);
         m.SetColor("_BaseColor", Color.white);
-        m.SetFloat("_Metallic", 0.4f);
-        m.SetFloat("_Smoothness", 0.65f);
+        m.SetFloat("_Metallic", 0.5f);
+        m.SetFloat("_Smoothness", 0.75f);
         m.EnableKeyword("_EMISSION");
         m.SetTexture("_EmissionMap", emTex);
-        m.SetColor("_EmissionColor", Color.white * 2.2f);
+        m.SetColor("_EmissionColor", Color.white * 2.8f);
         return m;
     });
 
@@ -149,13 +178,25 @@ public static class CyberMaterialFactory
         m.SetColor("_BaseColor", Color.white);
         m.EnableKeyword("_EMISSION");
         m.SetTexture("_EmissionMap", tex);
-        m.SetColor("_EmissionColor", Color.white * 3.2f);
+        m.SetColor("_EmissionColor", Color.white * 3.8f);
         return m;
     });
 
-    /// <summary>
-    /// Remaps imported Blender FBX materials to calibrated URP HDR materials.
-    /// </summary>
+    public static Material HeadlightBeamMat() => GetOrCreate("M_HeadlightBeam", () =>
+    {
+        var m = new Material(UnlitShader());
+        m.SetColor("_BaseColor", new Color(0.0f, 0.90f, 1.0f, 0.16f));
+        // Configure URP Unlit Transparent
+        m.SetFloat("_Surface", 1f);
+        m.SetFloat("_Blend", 1f); // Additive
+        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+        m.SetInt("_ZWrite", 0);
+        m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        m.renderQueue = 3000;
+        return m;
+    });
+
     public static void RemapFBXMaterials(GameObject root)
     {
         if (root == null) return;
@@ -175,7 +216,7 @@ public static class CyberMaterialFactory
                 else if (n.Contains("TireRubber"))    dst[i] = TireRubberMat();
                 else if (n.Contains("WheelRim"))      dst[i] = WheelRimMat();
                 else if (n.Contains("RoadAsphalt"))   dst[i] = RoadAsphaltMat();
-                else if (n.Contains("TrackBounds"))   dst[i] = TrackBoundsMat();
+                else if (n.Contains("TrackBounds"))   dst[i] = TrackBarriersMat();
                 else if (n.Contains("Building"))      dst[i] = BuildingFacadeMat(0);
                 else                                  dst[i] = CarAccentMat();
             }
@@ -188,9 +229,9 @@ public static class CyberMaterialFactory
         var skyShader = Shader.Find("Skybox/6 Sided");
         if (skyShader == null) return null;
 
-        var sideTex = GenerateSkyGradientTexture(128, 256, true);
-        var topTex = GenerateSolidTexture(16, 16, new Color(0.015f, 0.02f, 0.055f));
-        var botTex = GenerateSolidTexture(16, 16, new Color(0.03f, 0.04f, 0.09f));
+        var sideTex = GenerateSkyGradientTexture(128, 256);
+        var topTex = GenerateSolidTexture(16, 16, new Color(0.02f, 0.015f, 0.08f));
+        var botTex = GenerateSolidTexture(16, 16, new Color(0.025f, 0.03f, 0.08f));
 
         var sky = new Material(skyShader);
         sky.name = "M_CyberSkybox";
@@ -200,42 +241,84 @@ public static class CyberMaterialFactory
         sky.SetTexture("_RightTex", sideTex);
         sky.SetTexture("_UpTex", topTex);
         sky.SetTexture("_DownTex", botTex);
-        sky.SetColor("_Tint", new Color(0.5f, 0.5f, 0.5f, 1f));
-        sky.SetFloat("_Exposure", 1.1f);
+        sky.SetColor("_Tint", new Color(0.55f, 0.52f, 0.65f, 1f));
+        sky.SetFloat("_Exposure", 1.25f);
         return sky;
     }
 
-    // --- Procedural Texture Generators ---
+    // --- Procedural Textures ---
 
-    static Texture2D GenerateRoadTexture(int w, int h)
+    static Texture2D GenerateRoadTexture(int w, int h, out Texture2D emissionTex)
+    {
+        var tex = new Texture2D(w, h, TextureFormat.RGBA32, true);
+        emissionTex = new Texture2D(w, h, TextureFormat.RGBA32, true);
+        tex.wrapMode = TextureWrapMode.Repeat;
+        emissionTex.wrapMode = TextureWrapMode.Repeat;
+        tex.anisoLevel = 8;
+
+        var cols = new Color[w * h];
+        var ems = new Color[w * h];
+
+        for (int y = 0; y < h; y++)
+        {
+            float v = (float)y / h;
+            bool centerDash = (v % 0.25f) < 0.13f;
+            for (int x = 0; x < w; x++)
+            {
+                float u = (float)x / w;
+                float grain = Mathf.PerlinNoise(x * 0.25f, y * 0.25f) * 0.035f;
+                float puddle = Mathf.PerlinNoise(x * 0.04f, y * 0.02f) * 0.025f;
+                float laneDist = Mathf.Min(Mathf.Abs(u - 0.30f), Mathf.Abs(u - 0.70f));
+                float wear = Mathf.Exp(-laneDist * laneDist * 130f) * -0.02f;
+
+                Color c = new Color(0.05f + grain + puddle + wear, 0.065f + grain + puddle + wear, 0.12f + grain + puddle + wear, 1f);
+                Color e = Color.black;
+
+                if (u < 0.028f)
+                {
+                    c = Palette.NeonCyan;
+                    e = Palette.NeonCyan * 1.1f;
+                }
+                else if (u > 0.972f)
+                {
+                    c = Palette.NeonMagenta;
+                    e = Palette.NeonMagenta * 1.1f;
+                }
+                else if (Mathf.Abs(u - 0.5f) < 0.011f && centerDash)
+                {
+                    c = Palette.NeonCyan;
+                    e = Palette.NeonCyan * 0.65f;
+                }
+
+                cols[y * w + x] = c;
+                ems[y * w + x] = e;
+            }
+        }
+        tex.SetPixels(cols);
+        tex.Apply();
+        emissionTex.SetPixels(ems);
+        emissionTex.Apply();
+        return tex;
+    }
+
+    static Texture2D GenerateRumbleCurbTexture(int w, int h, bool flip)
     {
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, true);
         tex.wrapMode = TextureWrapMode.Repeat;
-        tex.filterMode = FilterMode.Bilinear;
+        tex.anisoLevel = 8;
         var cols = new Color[w * h];
 
         for (int y = 0; y < h; y++)
         {
             float v = (float)y / h;
-            bool centerDash = (v % 0.25f) < 0.14f;
+            bool band = (v % 0.5f) < 0.25f;
+            if (flip) band = !band;
+            Color c = band ? Palette.NeonCyan : Palette.NeonMagenta;
             for (int x = 0; x < w; x++)
             {
                 float u = (float)x / w;
-                float grain = Mathf.PerlinNoise(x * 0.35f, y * 0.35f) * 0.04f;
-                // Subtle dark wet tire tracks
-                float laneDist = Mathf.Min(Mathf.Abs(u - 0.32f), Mathf.Abs(u - 0.68f));
-                float wear = Mathf.Exp(-laneDist * laneDist * 140f) * -0.025f;
-
-                Color c = new Color(0.065f + grain + wear, 0.085f + grain + wear, 0.145f + grain + wear, 1f);
-
-                // Edge stripes
-                if (u < 0.035f || u > 0.965f)
-                    c = Color.Lerp(c, Palette.NeonCyan, 0.65f);
-                // Center dashed line
-                else if (Mathf.Abs(u - 0.5f) < 0.012f && centerDash)
-                    c = Color.Lerp(c, new Color(0.35f, 0.85f, 1f), 0.7f);
-
-                cols[y * w + x] = c;
+                // Slight dark border at edge
+                cols[y * w + x] = (u < 0.1f || u > 0.9f) ? new Color(0.04f, 0.05f, 0.1f, 1f) : c;
             }
         }
         tex.SetPixels(cols);
@@ -243,27 +326,38 @@ public static class CyberMaterialFactory
         return tex;
     }
 
-    static Texture2D GenerateRoadEmissionTexture(int w, int h)
+    static Texture2D GenerateBarrierTexture(int w, int h, out Texture2D emissionTex)
     {
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, true);
+        emissionTex = new Texture2D(w, h, TextureFormat.RGBA32, true);
         tex.wrapMode = TextureWrapMode.Repeat;
+        emissionTex.wrapMode = TextureWrapMode.Repeat;
+
         var cols = new Color[w * h];
+        var ems = new Color[w * h];
+        Color metal = new Color(0.07f, 0.09f, 0.18f, 1f);
+
         for (int y = 0; y < h; y++)
         {
-            float v = (float)y / h;
-            bool centerDash = (v % 0.25f) < 0.14f;
+            float v = (float)y / h; // vertical height along barrier wall (0 = bottom, 1 = top)
+            bool cyanRail = Mathf.Abs(v - 0.36f) < 0.075f;
+            bool magRail = Mathf.Abs(v - 0.78f) < 0.055f;
+
             for (int x = 0; x < w; x++)
             {
-                float u = (float)x / w;
-                Color c = Color.black;
-                if (u < 0.03f) c = Palette.NeonCyan * 0.8f;
-                else if (u > 0.97f) c = Palette.NeonMagenta * 0.8f;
-                else if (Mathf.Abs(u - 0.5f) < 0.01f && centerDash) c = Palette.NeonCyan * 0.45f;
+                Color c = metal;
+                Color e = Color.black;
+                if (cyanRail) { c = Palette.NeonCyan; e = Palette.NeonCyan; }
+                else if (magRail) { c = Palette.NeonMagenta; e = Palette.NeonMagenta * 0.9f; }
+
                 cols[y * w + x] = c;
+                ems[y * w + x] = e;
             }
         }
         tex.SetPixels(cols);
         tex.Apply();
+        emissionTex.SetPixels(ems);
+        emissionTex.Apply();
         return tex;
     }
 
@@ -273,9 +367,9 @@ public static class CyberMaterialFactory
         tex.wrapMode = TextureWrapMode.Repeat;
         tex.anisoLevel = 8;
         var cols = new Color[w * h];
-        Color bg = new Color(0.025f, 0.035f, 0.075f, 1f);
-        Color glowLine = new Color(0.05f, 0.35f, 0.65f, 1f);
-        Color coreLine = new Color(0.0f, 0.85f, 1.0f, 1f);
+        Color bg = new Color(0.02f, 0.03f, 0.07f, 1f);
+        Color glowLine = new Color(0.06f, 0.38f, 0.68f, 1f);
+        Color coreLine = new Color(0.0f, 0.90f, 1.0f, 1f);
 
         for (int y = 0; y < h; y++)
         {
@@ -295,7 +389,7 @@ public static class CyberMaterialFactory
         return tex;
     }
 
-    static Texture2D GenerateBuildingTexture(int w, int h, Color accent, int seed, out Texture2D emissionTex)
+    static Texture2D GenerateBuildingTexture(int w, int h, Color primary, Color secondary, int seed, out Texture2D emissionTex)
     {
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, true);
         emissionTex = new Texture2D(w, h, TextureFormat.RGBA32, true);
@@ -307,20 +401,23 @@ public static class CyberMaterialFactory
         var rng = new System.Random(seed);
 
         int colsGrid = 8;
-        int rowsGrid = 24;
+        int rowsGrid = 22;
         bool[,] lit = new bool[colsGrid, rowsGrid];
+        bool[,] useSec = new bool[colsGrid, rowsGrid];
         float[,] bright = new float[colsGrid, rowsGrid];
+
         for (int gx = 0; gx < colsGrid; gx++)
         {
             for (int gy = 0; gy < rowsGrid; gy++)
             {
-                lit[gx, gy] = rng.NextDouble() < 0.32;
-                bright[gx, gy] = 0.4f + (float)rng.NextDouble() * 0.6f;
+                lit[gx, gy] = rng.NextDouble() < 0.42;
+                useSec[gx, gy] = rng.NextDouble() < 0.25;
+                bright[gx, gy] = 0.55f + (float)rng.NextDouble() * 0.45f;
             }
         }
 
-        Color wall = new Color(0.045f, 0.065f, 0.125f, 1f);
-        Color darkWin = new Color(0.02f, 0.03f, 0.06f, 1f);
+        Color wall = new Color(0.04f, 0.055f, 0.12f, 1f);
+        Color darkWin = new Color(0.02f, 0.028f, 0.06f, 1f);
 
         for (int y = 0; y < h; y++)
         {
@@ -334,12 +431,20 @@ public static class CyberMaterialFactory
                 int gx = Mathf.Min((int)(u * colsGrid), colsGrid - 1);
                 float fx = (u * colsGrid) - gx;
 
-                bool isWindow = fx > 0.18f && fx < 0.82f && fy > 0.25f && fy < 0.78f;
+                // Vertical neon billboard strip on one edge
+                if (u > 0.88f && u < 0.94f && v > 0.25f && v < 0.72f)
+                {
+                    cols[y * w + x] = secondary;
+                    ems[y * w + x] = secondary * 1.35f;
+                    continue;
+                }
+
+                bool isWindow = fx > 0.15f && fx < 0.85f && fy > 0.24f && fy < 0.76f;
                 if (isWindow)
                 {
                     if (lit[gx, gy])
                     {
-                        Color wc = accent * bright[gx, gy];
+                        Color wc = (useSec[gx, gy] ? secondary : primary) * bright[gx, gy];
                         cols[y * w + x] = wc;
                         ems[y * w + x] = wc;
                     }
@@ -388,15 +493,15 @@ public static class CyberMaterialFactory
         return tex;
     }
 
-    static Texture2D GenerateSkyGradientTexture(int w, int h, bool horizonGlow)
+    static Texture2D GenerateSkyGradientTexture(int w, int h)
     {
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
         var cols = new Color[w * h];
-        Color zenith = new Color(0.015f, 0.02f, 0.055f, 1f);
-        Color mid = new Color(0.07f, 0.05f, 0.18f, 1f);
-        Color horizon = new Color(0.18f, 0.06f, 0.28f, 1f);
-        Color cyanBand = new Color(0.04f, 0.22f, 0.36f, 1f);
+        Color zenith = new Color(0.04f, 0.02f, 0.12f, 1f);
+        Color mid = new Color(0.14f, 0.07f, 0.28f, 1f);
+        Color horizon = new Color(0.28f, 0.08f, 0.38f, 1f);
+        Color cyanBand = new Color(0.05f, 0.28f, 0.45f, 1f);
 
         for (int y = 0; y < h; y++)
         {
@@ -406,10 +511,10 @@ public static class CyberMaterialFactory
                 c = new Color(0.02f, 0.03f, 0.07f, 1f);
             else if (t < 0.54f)
                 c = Color.Lerp(cyanBand, horizon, (t - 0.48f) / 0.06f);
-            else if (t < 0.70f)
-                c = Color.Lerp(horizon, mid, (t - 0.54f) / 0.16f);
+            else if (t < 0.72f)
+                c = Color.Lerp(horizon, mid, (t - 0.54f) / 0.18f);
             else
-                c = Color.Lerp(mid, zenith, (t - 0.70f) / 0.30f);
+                c = Color.Lerp(mid, zenith, (t - 0.72f) / 0.28f);
 
             for (int x = 0; x < w; x++)
                 cols[y * w + x] = c;

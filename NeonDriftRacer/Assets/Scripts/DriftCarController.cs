@@ -4,27 +4,30 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Arcade Drift Car Controller with real lateral slip physics, handbrake drift (Space),
-/// animated spinning/steering wheels, and chassis pitch/roll suspension feel.
+/// Arcade Drift Car Controller with authentic fishtailing physics:
+/// Angular yaw momentum lets the rear end whip out smoothly into corners (especially with Space handbrake),
+/// while front wheels visually counter-steer into the slide.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class DriftCarController : MonoBehaviour
 {
     [Header("Drivetrain")]
-    public float maxSpeed = 56f;
-    public float acceleration = 36f;
-    public float brakeForce = 52f;
+    public float maxSpeed = 58f;
+    public float acceleration = 38f;
+    public float brakeForce = 54f;
     public float reverseSpeed = 16f;
 
-    [Header("Steering & Drift")]
-    public float steerSpeed = 128f;
-    public float driftSteerBonus = 1.32f;
-    public float normalLateralGrip = 7.5f;
-    public float driftLateralGrip = 2.4f;
+    [Header("Fishtail & Drift Physics")]
+    public float steerSpeed = 118f;
+    public float driftYawBoost = 1.42f;
+    public float yawInertia = 9.5f;         // smooth angular momentum for fishtailing
+    public float normalLateralGrip = 8.5f;
+    public float driftLateralGrip = 1.85f;  // low rear grip = true tail swing!
+    public float handbrakeGrip = 1.15f;
 
     [Header("Visuals & Suspension")]
-    public float bodyRollAngle = 6.5f;
-    public float bodyPitchAngle = 2.8f;
+    public float bodyRollAngle = 7.5f;
+    public float bodyPitchAngle = 3.0f;
     public float suspensionSpeed = 9f;
 
     // --- State Properties ---
@@ -41,8 +44,8 @@ public class DriftCarController : MonoBehaviour
     Transform wheelFL, wheelFR, wheelRL, wheelRR;
     float wheelSpinAngle;
     float steerVisualAngle;
+    float currentYawRate;
     float boostTimer;
-    Vector3 horizontalVel;
 
     void Awake()
     {
@@ -128,59 +131,62 @@ public class DriftCarController : MonoBehaviour
     {
         float dt = Time.fixedDeltaTime;
 
-        // Read actual horizontal velocity from Rigidbody (respects wall collisions!)
-        horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        Vector3 horizontalVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         float forwardSpeed = Vector3.Dot(horizontalVel, transform.forward);
         float lateralSpeed = Vector3.Dot(horizontalVel, transform.right);
 
-        float topSpeed = boostTimer > 0f ? maxSpeed * 1.38f : maxSpeed;
+        float topSpeed = boostTimer > 0f ? maxSpeed * 1.4f : maxSpeed;
         if (boostTimer > 0f) boostTimer -= dt;
 
-        // Accelerate / Brake along forward axis
+        // Forward Drive / Brake
         if (boostTimer > 0f)
         {
-            forwardSpeed = Mathf.MoveTowards(forwardSpeed, topSpeed, acceleration * 1.8f * dt);
+            forwardSpeed = Mathf.MoveTowards(forwardSpeed, topSpeed, acceleration * 1.9f * dt);
         }
         else if (ThrottleInput > 0.05f)
         {
-            forwardSpeed = Mathf.MoveTowards(forwardSpeed, topSpeed * ThrottleInput, acceleration * dt);
+            // Slight speed scrub while sliding hard, then snap acceleration on exit!
+            float driftDrag = IsDrifting ? 0.96f : 1f;
+            forwardSpeed = Mathf.MoveTowards(forwardSpeed, topSpeed * ThrottleInput * driftDrag, acceleration * dt);
         }
         else if (ThrottleInput < -0.05f)
         {
             float target = forwardSpeed > 1f ? 0f : -reverseSpeed;
-            float rate = forwardSpeed > 1f ? brakeForce : acceleration * 0.65f;
+            float rate = forwardSpeed > 1f ? brakeForce : acceleration * 0.7f;
             forwardSpeed = Mathf.MoveTowards(forwardSpeed, target, rate * dt);
         }
         else
         {
-            forwardSpeed = Mathf.MoveTowards(forwardSpeed, 0f, acceleration * 0.32f * dt);
+            forwardSpeed = Mathf.MoveTowards(forwardSpeed, 0f, acceleration * 0.30f * dt);
         }
 
-        // Determine Drift State
-        bool initiatingDrift = Mathf.Abs(forwardSpeed) > 12f && (HandbrakeInput || Mathf.Abs(SteerInput) > 0.6f);
+        // Compute slip angle between car's nose and actual velocity vector
         float rawAngle = horizontalVel.sqrMagnitude > 4f
             ? Vector3.SignedAngle(transform.forward, horizontalVel.normalized, Vector3.up)
             : 0f;
 
-        IsDrifting = (initiatingDrift && Mathf.Abs(SteerInput) > 0.1f) || (Mathf.Abs(rawAngle) > 10f && Mathf.Abs(forwardSpeed) > 10f);
+        // Fishtail / Drift detection: steering hard at speed, holding Space, or carrying >8 deg slip angle
+        bool initiating = Mathf.Abs(forwardSpeed) > 10f && (HandbrakeInput || Mathf.Abs(SteerInput) > 0.5f);
+        IsDrifting = (initiating && Mathf.Abs(SteerInput) > 0.1f) || (Mathf.Abs(rawAngle) > 8f && Mathf.Abs(forwardSpeed) > 8f);
         DriftAngle = rawAngle;
 
-        // Steering yaw
+        // Smooth Yaw Rate with Angular Inertia -> creates natural fishtail whip & counter-steer!
         float speedFactor = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 7f);
-        if (Mathf.Abs(forwardSpeed) > 0.4f && Mathf.Abs(SteerInput) > 0.01f)
-        {
-            float dir = forwardSpeed >= 0f ? 1f : -1f;
-            float turnMul = IsDrifting ? driftSteerBonus : 1f;
-            float turn = SteerInput * steerSpeed * turnMul * speedFactor * dir * dt;
-            rb.MoveRotation(rb.rotation * Quaternion.Euler(0f, turn, 0f));
-        }
+        float dir = forwardSpeed >= 0f ? 1f : -1f;
+        float yawMul = HandbrakeInput ? driftYawBoost * 1.15f : (IsDrifting ? driftYawBoost : 1f);
+        float targetYawRate = SteerInput * steerSpeed * yawMul * speedFactor * dir;
 
-        // Lateral grip: low grip during drift lets the tail slide out smoothly!
-        float grip = IsDrifting ? driftLateralGrip : normalLateralGrip;
-        if (HandbrakeInput) grip = driftLateralGrip * 0.65f;
+        currentYawRate = Mathf.Lerp(currentYawRate, targetYawRate, yawInertia * dt);
+        if (Mathf.Abs(currentYawRate) > 0.05f)
+            rb.MoveRotation(rb.rotation * Quaternion.Euler(0f, currentYawRate * dt, 0f));
+
+        // Lateral Grip: low grip during drift / handbrake lets the tail swing wide!
+        float grip = HandbrakeInput ? handbrakeGrip : (IsDrifting ? driftLateralGrip : normalLateralGrip);
         lateralSpeed = Mathf.Lerp(lateralSpeed, 0f, grip * dt);
 
-        // Reconstruct velocity in world space
+        // Clamp max sideways slide so fishtails stay controllable & fun
+        lateralSpeed = Mathf.Clamp(lateralSpeed, -28f, 28f);
+
         Vector3 newHorizontal = transform.forward * forwardSpeed + transform.right * lateralSpeed;
         rb.linearVelocity = new Vector3(newHorizontal.x, rb.linearVelocity.y, newHorizontal.z);
         Speed = forwardSpeed;
@@ -188,9 +194,10 @@ public class DriftCarController : MonoBehaviour
         // Visual Suspension Roll & Pitch
         if (bodyVisual != null)
         {
-            float targetRoll = -SteerInput * bodyRollAngle * speedFactor;
+            float rollSource = IsDrifting ? Mathf.Clamp(DriftAngle / 28f, -1.2f, 1.2f) : SteerInput;
+            float targetRoll = -rollSource * bodyRollAngle * speedFactor;
             float targetPitch = -ThrottleInput * bodyPitchAngle;
-            if (IsBoosting) targetPitch = -bodyPitchAngle * 1.4f;
+            if (IsBoosting) targetPitch = -bodyPitchAngle * 1.5f;
 
             Vector3 cur = bodyVisual.localEulerAngles;
             float roll = Mathf.LerpAngle(cur.z, targetRoll, suspensionSpeed * dt);
@@ -203,7 +210,12 @@ public class DriftCarController : MonoBehaviour
     {
         float dt = Time.deltaTime;
         wheelSpinAngle += (Speed / 0.36f) * Mathf.Rad2Deg * dt;
-        steerVisualAngle = Mathf.Lerp(steerVisualAngle, SteerInput * 26f, 12f * dt);
+
+        // Front wheels visibly counter-steer into the fishtail slide!
+        float targetSteer = IsDrifting && Mathf.Abs(SteerInput) < 0.2f
+            ? Mathf.Clamp(DriftAngle * 0.85f, -32f, 32f)
+            : SteerInput * 28f;
+        steerVisualAngle = Mathf.Lerp(steerVisualAngle, targetSteer, 14f * dt);
 
         if (wheelFL != null) wheelFL.localRotation = Quaternion.Euler(wheelSpinAngle, steerVisualAngle, 0f);
         if (wheelFR != null) wheelFR.localRotation = Quaternion.Euler(wheelSpinAngle, steerVisualAngle, 0f);
@@ -211,7 +223,7 @@ public class DriftCarController : MonoBehaviour
         if (wheelRR != null) wheelRR.localRotation = Quaternion.Euler(wheelSpinAngle, 0f, 0f);
     }
 
-    public void ApplyBoost(float duration = 1.5f)
+    public void ApplyBoost(float duration = 1.6f)
     {
         boostTimer = Mathf.Max(boostTimer, duration);
     }
@@ -219,6 +231,7 @@ public class DriftCarController : MonoBehaviour
     public void ResetCar(Vector3 pos, Quaternion rot)
     {
         boostTimer = 0f;
+        currentYawRate = 0f;
         IsDrifting = false;
         transform.SetPositionAndRotation(pos, rot);
         if (rb != null)
