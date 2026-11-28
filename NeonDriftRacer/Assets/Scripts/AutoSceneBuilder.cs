@@ -6,9 +6,10 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Complete Runtime Auto-Builder for Neon Drift Racer:
-/// Loads the sculpted Blender FBX car, builds the wet-asphalt neon circuit,
-/// glowing boost pads, checkpoint gantries, lit skyscraper cityscape, synthwave grid,
-/// URP HDR post-processing (Bloom + ACES), car headlights, drift VFX, audio, and cyberpunk HUD.
+/// Assembles the hero-banner cyberpunk world: wet mirror-reflective asphalt + Realtime ReflectionProbe,
+/// alternating cyan/magenta rumble curbs, neon-railed barriers, dense inner & outer lit skyscrapers,
+/// elevated monorail skybridge, atmospheric rain, sculpted Blender car with cyan underglow & headlights,
+/// fishtail VFX, procedural audio, and cyberpunk HUD + live minimap.
 /// </summary>
 public class AutoSceneBuilder : MonoBehaviour
 {
@@ -20,28 +21,14 @@ public class AutoSceneBuilder : MonoBehaviour
 
         CyberMaterialFactory.ClearCache();
 
-        // 1. Lighting, Skybox & Fog
         SetupLightingAndSky();
-
-        // 2. Post Processing Volume (ACES Tonemapping + HDR Bloom)
         SetupPostProcessing();
-
-        // 3. Track & Waypoints + Cyber Grid Floor
         var tw = SetupTrackAndWaypoints();
-
-        // 4. Props (Checkpoint Gantries, Boost Pads, Lit Skyscrapers)
         SetupPropsAndCity(tw);
-
-        // 5. Sculpted Blender Car + Headlights + Drift VFX
         var car = SetupCar(tw);
-
-        // 6. Camera Rig (with renderPostProcessing enabled!)
         SetupCamera(car);
-
-        // 7. Audio Synthesis Engine
+        SetupReflectionProbe();
         SetupAudio(car);
-
-        // 8. GameLoop & Cyberpunk HUD + Minimap
         SetupSystemsAndHUD(car, tw);
     }
 
@@ -50,30 +37,28 @@ public class AutoSceneBuilder : MonoBehaviour
         var lights = Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
         foreach (var l in lights) Object.Destroy(l.gameObject);
 
-        // Cool key light angled across the track
+        // Cool moonlight / neon key angled across the circuit
         var keyGO = new GameObject("Key Light");
         var key = keyGO.AddComponent<Light>();
         key.type = LightType.Directional;
         key.color = new Color(0.55f, 0.72f, 1.0f);
-        key.intensity = 0.85f;
+        key.intensity = 0.75f;
         key.shadows = LightShadows.Soft;
-        keyGO.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
+        keyGO.transform.rotation = Quaternion.Euler(38f, -35f, 0f);
 
-        // Gradient environment lighting so shadow sides are rich indigo, never flat gray
+        // Violet-indigo rim fill so dark surfaces stay rich
         RenderSettings.ambientMode = AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = new Color(0.14f, 0.20f, 0.42f);
-        RenderSettings.ambientEquatorColor = new Color(0.12f, 0.08f, 0.24f);
-        RenderSettings.ambientGroundColor = new Color(0.04f, 0.05f, 0.10f);
+        RenderSettings.ambientSkyColor = new Color(0.18f, 0.16f, 0.42f);
+        RenderSettings.ambientEquatorColor = new Color(0.16f, 0.08f, 0.28f);
+        RenderSettings.ambientGroundColor = new Color(0.04f, 0.05f, 0.11f);
 
-        // Synthwave Skybox
         var sky = CyberMaterialFactory.CreateCyberSkybox();
         if (sky != null) RenderSettings.skybox = sky;
 
-        // Atmospheric distance fog
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.ExponentialSquared;
-        RenderSettings.fogColor = new Color(0.05f, 0.04f, 0.12f);
-        RenderSettings.fogDensity = 0.0022f;
+        RenderSettings.fogColor = new Color(0.08f, 0.05f, 0.18f);
+        RenderSettings.fogDensity = 0.0024f;
     }
 
     static void SetupPostProcessing()
@@ -91,11 +76,11 @@ public class AutoSceneBuilder : MonoBehaviour
         var bloom = profile.Add<Bloom>();
         bloom.active = true;
         bloom.threshold.overrideState = true;
-        bloom.threshold.value = 0.95f;
+        bloom.threshold.value = 0.88f;
         bloom.intensity.overrideState = true;
-        bloom.intensity.value = 1.45f;
+        bloom.intensity.value = 1.65f;
         bloom.scatter.overrideState = true;
-        bloom.scatter.value = 0.7f;
+        bloom.scatter.value = 0.74f;
 
         var tone = profile.Add<Tonemapping>();
         tone.active = true;
@@ -105,16 +90,16 @@ public class AutoSceneBuilder : MonoBehaviour
         var vig = profile.Add<Vignette>();
         vig.active = true;
         vig.intensity.overrideState = true;
-        vig.intensity.value = 0.28f;
+        vig.intensity.value = 0.30f;
         vig.color.overrideState = true;
-        vig.color.value = Palette.Abyss;
+        vig.color.value = new Color(0.03f, 0.02f, 0.08f);
 
         var ca = profile.Add<ColorAdjustments>();
         ca.active = true;
         ca.contrast.overrideState = true;
-        ca.contrast.value = 14f;
+        ca.contrast.value = 16f;
         ca.saturation.overrideState = true;
-        ca.saturation.value = 16f;
+        ca.saturation.value = 18f;
 
         vol.profile = profile;
     }
@@ -129,27 +114,12 @@ public class AutoSceneBuilder : MonoBehaviour
             tw.LoadFromJson(jsonAsset.text);
 
         if (tw.waypoints != null && tw.waypoints.Count >= 3)
-        {
-            var trackRoot = TrackMeshGenerator.BuildTrack(tw.waypoints, tw.roadHalfWidth * 2f);
-            // Upgrade road & curb materials to textured wet asphalt + HDR neon
-            var road = trackRoot.transform.Find("RoadSurface")?.GetComponent<Renderer>();
-            if (road != null) road.sharedMaterial = CyberMaterialFactory.RoadAsphaltMat();
+            TrackMeshGenerator.BuildTrack(tw.waypoints, tw.roadHalfWidth * 2f);
 
-            var leftCurb = trackRoot.transform.Find("LeftNeonCurb")?.GetComponent<Renderer>();
-            if (leftCurb != null) leftCurb.sharedMaterial = CyberMaterialFactory.NeonCyanMat();
-
-            var rightCurb = trackRoot.transform.Find("RightNeonCurb")?.GetComponent<Renderer>();
-            if (rightCurb != null) rightCurb.sharedMaterial = CyberMaterialFactory.NeonMagentaMat();
-
-            var barriers = trackRoot.transform.Find("TrackBarriers")?.GetComponent<Renderer>();
-            if (barriers != null) barriers.sharedMaterial = CyberMaterialFactory.TrackBoundsMat();
-        }
-
-        // Synthwave Neon Grid Floor
         var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
         floor.name = "CyberGridFloor";
         floor.transform.position = new Vector3(0f, -0.35f, 0f);
-        floor.transform.localScale = new Vector3(140f, 1f, 140f);
+        floor.transform.localScale = new Vector3(160f, 1f, 160f);
         var fRend = floor.GetComponent<Renderer>();
         if (fRend != null) fRend.sharedMaterial = CyberMaterialFactory.CyberGridFloorMat();
 
@@ -159,51 +129,33 @@ public class AutoSceneBuilder : MonoBehaviour
     static void SetupPropsAndCity(TrackWaypoints tw)
     {
         var root = new GameObject("CyberPropsAndCity");
-
-        // 1. Lit Cyberpunk Skyscrapers around perimeter + inner skyline
         var rng = new System.Random(42);
-        int towerCount = 48;
-        for (int i = 0; i < towerCount; i++)
+
+        // 1. Outer Skyline (56 towers)
+        for (int i = 0; i < 56; i++)
         {
-            float angle = (float)i / towerCount * Mathf.PI * 2f + (float)rng.NextDouble() * 0.08f;
-            float dist = 168f + (float)rng.NextDouble() * 95f;
-            Vector3 pos = new Vector3(Mathf.Cos(angle) * dist, -0.35f, Mathf.Sin(angle) * dist);
-
-            var bldg = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            bldg.name = $"Skyscraper_{i}";
-            bldg.transform.SetParent(root.transform);
-
-            float w = 16f + (float)rng.NextDouble() * 18f;
-            float h = 55f + (float)rng.NextDouble() * 105f;
-            float d = 16f + (float)rng.NextDouble() * 18f;
-            bldg.transform.localScale = new Vector3(w, h, d);
-            bldg.transform.position = pos + Vector3.up * (h * 0.5f);
-            bldg.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 90f, 0f);
-
-            var rend = bldg.GetComponent<Renderer>();
-            if (rend != null) rend.sharedMaterial = CyberMaterialFactory.BuildingFacadeMat(i);
-
-            // Glowing neon crown trim
-            var crown = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            crown.name = "NeonCrown";
-            crown.transform.SetParent(bldg.transform);
-            crown.transform.localScale = new Vector3(1.03f, 0.035f, 1.03f);
-            crown.transform.localPosition = new Vector3(0f, 0.48f, 0f);
-            var cRend = crown.GetComponent<Renderer>();
-            if (cRend != null)
-            {
-                cRend.sharedMaterial = (i % 2 == 0)
-                    ? CyberMaterialFactory.NeonCyanMat()
-                    : CyberMaterialFactory.NeonMagentaMat();
-            }
+            float angle = (float)i / 56f * Mathf.PI * 2f + (float)rng.NextDouble() * 0.07f;
+            float dist = 152f + (float)rng.NextDouble() * 95f;
+            SpawnSkyscraper(root.transform, i, angle, dist, 55f, 165f, rng);
         }
 
-        // 2. 6 Checkpoint Gantries + 6 Glowing Boost Pads
+        // 2. Inner Circuit Skyline (16 towers safely inside radius 0..56m; track inner edge >= 72m)
+        for (int i = 0; i < 16; i++)
+        {
+            float angle = (float)i / 16f * Mathf.PI * 2f + 0.15f;
+            float dist = 12f + (float)rng.NextDouble() * 44f;
+            SpawnSkyscraper(root.transform, i + 100, angle, dist, 50f, 125f, rng);
+        }
+
+        // 3. Elevated Monorail Skybridge crossing over the track
+        SpawnMonorailBridge(root.transform);
+
+        // 4. 6 Checkpoint Gantries + 6 Glowing Boost Pads
         if (tw != null && tw.waypoints != null && tw.waypoints.Count >= 6)
         {
             int n = tw.waypoints.Count;
             int step = n / 6;
-            float gateHalfW = tw.roadHalfWidth + 0.6f;
+            float gateHalfW = tw.roadHalfWidth + 0.8f;
 
             for (int i = 0; i < 6; i++)
             {
@@ -225,32 +177,31 @@ public class AutoSceneBuilder : MonoBehaviour
                     ? CyberMaterialFactory.ScoreGoldMat()
                     : CyberMaterialFactory.NeonMagentaMat();
 
-                // Left & Right Pillars + Top Beam
                 for (int side = -1; side <= 1; side += 2)
                 {
                     var pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     pillar.transform.SetParent(gate.transform, false);
-                    pillar.transform.localScale = new Vector3(0.75f, 8.5f, 0.75f);
-                    pillar.transform.localPosition = new Vector3(side * gateHalfW, 4.25f, 0f);
+                    pillar.transform.localScale = new Vector3(0.8f, 8.8f, 0.8f);
+                    pillar.transform.localPosition = new Vector3(side * gateHalfW, 4.4f, 0f);
                     Object.Destroy(pillar.GetComponent<Collider>());
-                    pillar.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.TrackBoundsMat();
+                    pillar.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.CarBodyMat();
 
                     var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     strip.transform.SetParent(gate.transform, false);
-                    strip.transform.localScale = new Vector3(0.25f, 8.2f, 0.9f);
-                    strip.transform.localPosition = new Vector3(side * gateHalfW, 4.1f, 0f);
+                    strip.transform.localScale = new Vector3(0.28f, 8.4f, 0.95f);
+                    strip.transform.localPosition = new Vector3(side * gateHalfW, 4.2f, 0f);
                     Object.Destroy(strip.GetComponent<Collider>());
                     strip.GetComponent<Renderer>().sharedMaterial = gateMat;
                 }
 
                 var archTop = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 archTop.transform.SetParent(gate.transform, false);
-                archTop.transform.localScale = new Vector3(gateHalfW * 2f + 1.2f, 0.9f, 1.0f);
-                archTop.transform.localPosition = new Vector3(0f, 8.4f, 0f);
+                archTop.transform.localScale = new Vector3(gateHalfW * 2f + 1.4f, 0.95f, 1.1f);
+                archTop.transform.localPosition = new Vector3(0f, 8.6f, 0f);
                 Object.Destroy(archTop.GetComponent<Collider>());
                 archTop.GetComponent<Renderer>().sharedMaterial = gateMat;
 
-                // Boost Pad placed halfway between checkpoints
+                // Boost Pad halfway between checkpoints
                 int boostIdx = (i * step + step / 2) % n;
                 var bwp = tw.waypoints[boostIdx];
                 var padGO = new GameObject($"BoostPad_{i}");
@@ -260,16 +211,79 @@ public class AutoSceneBuilder : MonoBehaviour
 
                 var padBox = padGO.AddComponent<BoxCollider>();
                 padBox.isTrigger = true;
-                padBox.size = new Vector3(5.5f, 2.5f, 6.5f);
+                padBox.size = new Vector3(5.8f, 2.5f, 7.0f);
                 padGO.AddComponent<BoostPad>();
 
                 var padVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 padVisual.transform.SetParent(padGO.transform, false);
-                padVisual.transform.localScale = new Vector3(5.2f, 0.08f, 6.0f);
+                padVisual.transform.localScale = new Vector3(5.5f, 0.08f, 6.5f);
                 Object.Destroy(padVisual.GetComponent<Collider>());
                 padVisual.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.BoostPadMat();
             }
         }
+    }
+
+    static void SpawnSkyscraper(Transform parent, int idx, float angle, float dist, float minH, float maxH, System.Random rng)
+    {
+        Vector3 pos = new Vector3(Mathf.Cos(angle) * dist, -0.35f, Mathf.Sin(angle) * dist);
+        var bldg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bldg.name = $"Skyscraper_{idx}";
+        bldg.transform.SetParent(parent);
+
+        float w = 15f + (float)rng.NextDouble() * 16f;
+        float h = minH + (float)rng.NextDouble() * (maxH - minH);
+        float d = 15f + (float)rng.NextDouble() * 16f;
+        bldg.transform.localScale = new Vector3(w, h, d);
+        bldg.transform.position = pos + Vector3.up * (h * 0.5f);
+        bldg.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 90f, 0f);
+
+        var rend = bldg.GetComponent<Renderer>();
+        if (rend != null) rend.sharedMaterial = CyberMaterialFactory.BuildingFacadeMat(idx);
+
+        var crown = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        crown.name = "NeonCrown";
+        crown.transform.SetParent(bldg.transform);
+        crown.transform.localScale = new Vector3(1.03f, 0.03f, 1.03f);
+        crown.transform.localPosition = new Vector3(0f, 0.485f, 0f);
+        var cRend = crown.GetComponent<Renderer>();
+        if (cRend != null)
+        {
+            cRend.sharedMaterial = (idx % 2 == 0)
+                ? CyberMaterialFactory.NeonCyanMat()
+                : CyberMaterialFactory.NeonMagentaMat();
+        }
+    }
+
+    static void SpawnMonorailBridge(Transform parent)
+    {
+        var bridge = new GameObject("MonorailSkybridge");
+        bridge.transform.SetParent(parent);
+        bridge.transform.position = new Vector3(0f, 24f, 0f);
+        bridge.transform.rotation = Quaternion.Euler(0f, 28f, 0f);
+
+        var deck = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        deck.transform.SetParent(bridge.transform, false);
+        deck.transform.localScale = new Vector3(4.5f, 1.6f, 380f);
+        Object.Destroy(deck.GetComponent<Collider>());
+        deck.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.CarBodyMat();
+
+        for (int side = -1; side <= 1; side += 2)
+        {
+            var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            rail.transform.SetParent(bridge.transform, false);
+            rail.transform.localScale = new Vector3(0.35f, 0.45f, 380f);
+            rail.transform.localPosition = new Vector3(side * 2.35f, 0.5f, 0f);
+            Object.Destroy(rail.GetComponent<Collider>());
+            rail.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.NeonCyanMat();
+        }
+
+        // Illuminated Monorail Train silhouette
+        var train = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        train.transform.SetParent(bridge.transform, false);
+        train.transform.localScale = new Vector3(3.2f, 2.6f, 34f);
+        train.transform.localPosition = new Vector3(0f, 2.1f, -35f);
+        Object.Destroy(train.GetComponent<Collider>());
+        train.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.NeonCyanMat();
     }
 
     static DriftCarController SetupCar(TrackWaypoints tw)
@@ -306,29 +320,51 @@ public class AutoSceneBuilder : MonoBehaviour
 
         carGO.transform.SetPositionAndRotation(spawnPos, spawnRot);
 
-        // Headlights + Rear Underglow PointLight
+        // Headlight SpotLights + Additive Volumetric Light Cones
         for (int side = -1; side <= 1; side += 2)
         {
             var hlGO = new GameObject($"Headlight_{side}");
             hlGO.transform.SetParent(carGO.transform, false);
-            hlGO.transform.localPosition = new Vector3(side * 0.65f, 0.55f, 2.15f);
-            hlGO.transform.localRotation = Quaternion.Euler(10f, side * 4f, 0f);
+            hlGO.transform.localPosition = new Vector3(side * 0.66f, 0.56f, 2.12f);
+            hlGO.transform.localRotation = Quaternion.Euler(8f, side * 3f, 0f);
+
             var spot = hlGO.AddComponent<Light>();
             spot.type = LightType.Spot;
-            spot.color = new Color(0.75f, 0.95f, 1.0f);
-            spot.intensity = 18f;
-            spot.range = 42f;
-            spot.spotAngle = 60f;
+            spot.color = new Color(0.55f, 0.95f, 1.0f);
+            spot.intensity = 28f;
+            spot.range = 48f;
+            spot.spotAngle = 62f;
+
+            // Subtle additive light beam cone
+            var beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            beam.name = "HeadlightCone";
+            beam.transform.SetParent(hlGO.transform, false);
+            beam.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            beam.transform.localPosition = new Vector3(0f, 0f, 3.6f);
+            beam.transform.localScale = new Vector3(1.15f, 3.6f, 0.55f);
+            Object.Destroy(beam.GetComponent<Collider>());
+            beam.GetComponent<Renderer>().sharedMaterial = CyberMaterialFactory.HeadlightBeamMat();
         }
 
-        var glowGO = new GameObject("UnderglowLight");
-        glowGO.transform.SetParent(carGO.transform, false);
-        glowGO.transform.localPosition = new Vector3(0f, 0.35f, -0.5f);
-        var pt = glowGO.AddComponent<Light>();
-        pt.type = LightType.Point;
-        pt.color = Palette.NeonMagenta;
-        pt.intensity = 4.5f;
-        pt.range = 8f;
+        // Bright Electric Cyan Underglow PointLight casting onto wet asphalt
+        var underGO = new GameObject("UnderglowLight");
+        underGO.transform.SetParent(carGO.transform, false);
+        underGO.transform.localPosition = new Vector3(0f, 0.32f, 0f);
+        var underLight = underGO.AddComponent<Light>();
+        underLight.type = LightType.Point;
+        underLight.color = Palette.NeonCyan;
+        underLight.intensity = 10f;
+        underLight.range = 10f;
+
+        // Rear Magenta Taillight PointLight
+        var tailGO = new GameObject("TaillightGlow");
+        tailGO.transform.SetParent(carGO.transform, false);
+        tailGO.transform.localPosition = new Vector3(0f, 0.65f, -2.35f);
+        var tailLight = tailGO.AddComponent<Light>();
+        tailLight.type = LightType.Point;
+        tailLight.color = Palette.NeonMagenta;
+        tailLight.intensity = 7f;
+        tailLight.range = 9f;
 
         var col = carGO.GetComponent<BoxCollider>() ?? carGO.AddComponent<BoxCollider>();
         col.size = new Vector3(2.05f, 1.05f, 4.4f);
@@ -359,7 +395,6 @@ public class AutoSceneBuilder : MonoBehaviour
         cam.fieldOfView = 66f;
         cam.farClipPlane = 1000f;
 
-        // CRITICAL: Enable Post-Processing & AA on URP Camera Data so Bloom renders!
         var urpCam = cam.GetComponent<UniversalAdditionalCameraData>() ?? cam.gameObject.AddComponent<UniversalAdditionalCameraData>();
         urpCam.renderPostProcessing = true;
         urpCam.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
@@ -367,6 +402,47 @@ public class AutoSceneBuilder : MonoBehaviour
 
         var rig = cam.GetComponent<CameraRig>() ?? cam.gameObject.AddComponent<CameraRig>();
         if (car != null) rig.SetTarget(car.transform);
+
+        // Atmospheric Cyberpunk Rain attached to Camera
+        var rainGO = new GameObject("CyberRain");
+        rainGO.transform.SetParent(cam.transform, false);
+        rainGO.transform.localPosition = new Vector3(0f, 10f, 14f);
+        var ps = rainGO.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 0.65f;
+        main.startSpeed = 28f;
+        main.startSize = 0.06f;
+        main.startColor = new Color(0.55f, 0.85f, 1.0f, 0.25f);
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+        var em = ps.emission;
+        em.rateOverTime = 160f;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        shape.scale = new Vector3(36f, 2f, 36f);
+        rainGO.transform.localRotation = Quaternion.Euler(82f, 0f, 0f);
+
+        var pRend = rainGO.GetComponent<ParticleSystemRenderer>();
+        if (pRend != null)
+        {
+            pRend.renderMode = ParticleSystemRenderMode.Stretch;
+            pRend.lengthScale = 6f;
+            pRend.material = CyberMaterialFactory.HeadlightBeamMat();
+        }
+    }
+
+    static void SetupReflectionProbe()
+    {
+        var probeGO = new GameObject("CyberReflectionProbe");
+        probeGO.transform.position = new Vector3(0f, 12f, 0f);
+        var probe = probeGO.AddComponent<ReflectionProbe>();
+        probe.mode = ReflectionProbeMode.Realtime;
+        probe.refreshMode = ReflectionProbeRefreshMode.EveryFrame;
+        probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.IndividualFaces;
+        probe.resolution = 256;
+        probe.size = new Vector3(450f, 140f, 450f);
+        probe.intensity = 1.15f;
     }
 
     static void SetupAudio(DriftCarController car)
@@ -414,7 +490,6 @@ public class AutoSceneBuilder : MonoBehaviour
             gl.lapManager = lm;
         }
 
-        // Wire audio cues to checkpoints and laps
         var am = Object.FindAnyObjectByType<AudioManager>();
         if (am != null)
         {
@@ -501,22 +576,18 @@ public class AutoSceneBuilder : MonoBehaviour
         dotGO.transform.SetParent(mapPanel.transform, false);
         var dotRt = dotGO.AddComponent<RectTransform>();
         dotRt.sizeDelta = new Vector2(12f, 12f);
-        var dotImg = dotGO.AddComponent<Image>();
-        dotImg.color = Palette.ScoreGold;
+        dotGO.AddComponent<Image>().color = Palette.ScoreGold;
         hud.minimapDot = dotRt;
 
-        // Drift Multiplier Combo
         hud.driftText = CreateTMPText(canvasGO.transform, "DriftText",
             new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(380f, 80f),
             "DRIFT x1.0", 48f, Palette.NeonCyan, TMPro.TextAlignmentOptions.Right);
         hud.driftText.rectTransform.anchoredPosition = new Vector2(-44f, 0f);
 
-        // Countdown Center
         hud.countdownText = CreateTMPText(canvasGO.transform, "CountdownText",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(500f, 220f),
             "3", 136f, Palette.ScoreGold, TMPro.TextAlignmentOptions.Center);
 
-        // Center Message
         hud.messageText = CreateTMPText(canvasGO.transform, "MessageText",
             new Vector2(0.5f, 0.36f), new Vector2(0.5f, 0.36f), new Vector2(880f, 200f),
             "PRESS ENTER TO START", 40f, Palette.UIText, TMPro.TextAlignmentOptions.Center);
@@ -552,8 +623,7 @@ public class AutoSceneBuilder : MonoBehaviour
         if (tw == null || tw.waypoints.Count == 0) return;
         int res = 128;
         var tex = new Texture2D(res, res, TextureFormat.RGBA32, false);
-        var clear = new Color[res * res];
-        tex.SetPixels(clear);
+        tex.SetPixels(new Color[res * res]);
 
         float minX = float.MaxValue, maxX = float.MinValue;
         float minZ = float.MaxValue, maxZ = float.MinValue;
@@ -581,8 +651,7 @@ public class AutoSceneBuilder : MonoBehaviour
         imgGO.transform.SetParent(parent, false);
         var rt = imgGO.AddComponent<RectTransform>();
         rt.sizeDelta = new Vector2(size, size);
-        var raw = imgGO.AddComponent<RawImage>();
-        raw.texture = tex;
+        imgGO.AddComponent<RawImage>().texture = tex;
     }
 
     static TMPro.TextMeshProUGUI CreateTMPText(

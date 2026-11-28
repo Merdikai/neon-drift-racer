@@ -1,14 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// Runtime-configured Drift VFX: glowing neon tire trails, drift smoke puffs,
-/// and thruster boost trails attached directly to the car's wheels and rear.
+/// Hero-style Drift VFX: sweeping hot-magenta taillight light-ribbons,
+/// electric-cyan rear tire skid trails, and stylized drift smoke puffs.
 /// </summary>
 public class DriftVFX : MonoBehaviour
 {
     public DriftCarController car;
     public TrailRenderer[] skidTrails;
-    public TrailRenderer[] boostTrails;
+    public TrailRenderer[] taillightRibbons;
     public ParticleSystem[] tireSmoke;
 
     void Start()
@@ -22,10 +22,33 @@ public class DriftVFX : MonoBehaviour
     {
         var unlitShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
 
-        // Rear tire skid trails (glowing magenta)
-        var trailMat = new Material(unlitShader);
-        trailMat.SetColor("_BaseColor", Palette.NeonMagenta * 2.2f);
-        trailMat.color = Palette.NeonMagenta;
+        // 1. Hot Magenta Taillight Light-Ribbons (always stream at speed, flare on drift/boost!)
+        var ribbonMat = new Material(unlitShader);
+        ribbonMat.SetColor("_BaseColor", Palette.NeonMagenta * 3.5f);
+        ribbonMat.color = Palette.NeonMagenta;
+
+        taillightRibbons = new TrailRenderer[2];
+        Vector3[] tailOffsets = { new Vector3(-0.76f, 0.64f, -2.16f), new Vector3(0.76f, 0.64f, -2.16f) };
+        for (int i = 0; i < 2; i++)
+        {
+            var rGO = new GameObject($"TaillightRibbon_{i}");
+            rGO.transform.SetParent(transform, false);
+            rGO.transform.localPosition = tailOffsets[i];
+
+            var tr = rGO.AddComponent<TrailRenderer>();
+            tr.time = 0.55f;
+            tr.startWidth = 0.16f;
+            tr.endWidth = 0.0f;
+            tr.minVertexDistance = 0.15f;
+            tr.material = ribbonMat;
+            tr.emitting = false;
+            taillightRibbons[i] = tr;
+        }
+
+        // 2. Electric Cyan Rear Tire Skid Trails + Drift Smoke
+        var skidMat = new Material(unlitShader);
+        skidMat.SetColor("_BaseColor", Palette.NeonCyan * 2.8f);
+        skidMat.color = Palette.NeonCyan;
 
         skidTrails = new TrailRenderer[2];
         tireSmoke = new ParticleSystem[2];
@@ -38,63 +61,41 @@ public class DriftVFX : MonoBehaviour
             tGO.transform.localPosition = rearOffsets[i];
 
             var tr = tGO.AddComponent<TrailRenderer>();
-            tr.time = 1.4f;
-            tr.startWidth = 0.24f;
-            tr.endWidth = 0.05f;
-            tr.minVertexDistance = 0.2f;
-            tr.material = trailMat;
+            tr.time = 1.6f;
+            tr.startWidth = 0.26f;
+            tr.endWidth = 0.04f;
+            tr.minVertexDistance = 0.18f;
+            tr.material = skidMat;
             tr.emitting = false;
             skidTrails[i] = tr;
 
-            // Tire smoke particle system
+            // Stylized drift smoke
             var pGO = new GameObject($"TireSmoke_{i}");
             pGO.transform.SetParent(transform, false);
             pGO.transform.localPosition = rearOffsets[i];
 
             var ps = pGO.AddComponent<ParticleSystem>();
             var main = ps.main;
-            main.startLifetime = 0.55f;
-            main.startSpeed = 2.5f;
-            main.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.85f);
-            main.startColor = new Color(0.0f, 0.9f, 1.0f, 0.35f);
+            main.startLifetime = 0.65f;
+            main.startSpeed = 3.2f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 1.05f);
+            main.startColor = new Color(0.55f, 0.92f, 1.0f, 0.32f);
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.playOnAwake = true;
 
             var em = ps.emission;
-            em.rateOverTime = 28f;
+            em.rateOverTime = 36f;
             em.enabled = false;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 20f;
-            shape.radius = 0.15f;
+            shape.angle = 25f;
+            shape.radius = 0.18f;
 
             var pRend = pGO.GetComponent<ParticleSystemRenderer>();
-            if (pRend != null) pRend.material = trailMat;
+            if (pRend != null) pRend.material = skidMat;
 
             tireSmoke[i] = ps;
-        }
-
-        // Boost thruster trails (electric cyan)
-        var boostMat = new Material(unlitShader);
-        boostMat.SetColor("_BaseColor", Palette.NeonCyan * 3.0f);
-        boostMat.color = Palette.NeonCyan;
-
-        boostTrails = new TrailRenderer[2];
-        Vector3[] exhaustOffsets = { new Vector3(-0.36f, 0.38f, -2.18f), new Vector3(0.36f, 0.38f, -2.18f) };
-        for (int i = 0; i < 2; i++)
-        {
-            var bGO = new GameObject($"BoostTrail_{i}");
-            bGO.transform.SetParent(transform, false);
-            bGO.transform.localPosition = exhaustOffsets[i];
-
-            var tr = bGO.AddComponent<TrailRenderer>();
-            tr.time = 0.35f;
-            tr.startWidth = 0.18f;
-            tr.endWidth = 0.0f;
-            tr.material = boostMat;
-            tr.emitting = false;
-            boostTrails[i] = tr;
         }
     }
 
@@ -103,7 +104,19 @@ public class DriftVFX : MonoBehaviour
         if (car == null) return;
 
         bool drifting = car.IsDrifting;
-        bool boosting = car.IsBoosting || car.Speed > car.maxSpeed * 0.92f;
+        bool movingFast = Mathf.Abs(car.Speed) > 16f;
+        bool boosting = car.IsBoosting;
+
+        if (taillightRibbons != null)
+        {
+            foreach (var tr in taillightRibbons)
+            {
+                if (tr == null) continue;
+                tr.emitting = movingFast || drifting || boosting;
+                tr.time = boosting ? 0.9f : (drifting ? 0.7f : 0.38f);
+                tr.startWidth = boosting ? 0.28f : (drifting ? 0.20f : 0.11f);
+            }
+        }
 
         if (skidTrails != null)
         {
@@ -119,12 +132,6 @@ public class DriftVFX : MonoBehaviour
                 var em = ps.emission;
                 em.enabled = drifting;
             }
-        }
-
-        if (boostTrails != null)
-        {
-            foreach (var tr in boostTrails)
-                if (tr != null) tr.emitting = boosting;
         }
     }
 }

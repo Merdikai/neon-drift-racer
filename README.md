@@ -26,10 +26,11 @@
 
 ## ✨ Key Features
 
-- **Real Lateral-Slip Drift Physics** (`DriftCarController.cs`) — Responsive arcade handling with independent forward & lateral velocity vectors, Spacebar handbrake drift initiation, boost pad acceleration, spinning/steering wheels, and dynamic suspension pitch & roll.
-- **Custom 3D Assets & Procedural PBR World** (`CyberMaterialFactory.cs`, `TrackMeshGenerator.cs`) — Sculpted Blender drift car (`NeonDriftCar.fbx`) paired with a procedurally generated wet-asphalt highway, glowing electric-cyan & hot-magenta curbs, 48 lit skyscrapers, 6 checkpoint gantries, 6 chevron boost pads, and an infinite synthwave grid floor.
-- **URP HDR Bloom & Synthwave Skybox** (`AutoSceneBuilder.cs`) — ACES Tonemapping, HDR Bloom, SMAA anti-aliasing, car `SpotLight` headlights, magenta underglow, and a 6-sided procedural night-sky gradient.
-- **Drift VFX & Procedural Audio** (`DriftVFX.cs`, `AudioManager.cs`) — Neon rear-tire skid trails, cyan drift smoke particles, boost exhaust trails, and real-time synthesized engine drone, tire screech, boost sweep, checkpoint blips, and retro synth bassline.
+- **Real Fishtailing & Lateral-Slip Drift Physics** (`DriftCarController.cs`) — Authentic angular yaw inertia (`yawInertia`) and low drift/handbrake lateral grip let the rear end swing wide into corners, complete with automatic front-wheel counter-steering, Spacebar handbrake kicks, boost pad acceleration, spinning wheels, and suspension pitch/roll.
+- **Wet Mirror-Reflective Circuit & Neon Curbs** (`CyberMaterialFactory.cs`, `TrackMeshGenerator.cs`) — Rain-slicked asphalt paired with a **Realtime `ReflectionProbe`**, alternating **Electric Cyan & Hot Magenta** rumble-strip curbs, dual neon-railed barrier walls, 6 checkpoint gantries, 6 chevron boost pads, and an infinite synthwave grid floor.
+- **Living Cyberpunk Metropolis & Rain** (`AutoSceneBuilder.cs`) — **72 lit skyscrapers** (outer skyline + inner-circuit towers) with glowing neon windows and vertical billboards, an **elevated monorail skybridge** with a glowing cyan train, atmospheric **falling rain streaks**, URP HDR Bloom, ACES Tonemapping, and a 6-sided synthwave skybox.
+- **Underglow, Headlight Beams & Taillight Ribbons** (`DriftVFX.cs`, `AutoSceneBuilder.cs`) — Dual `SpotLight` headlights with additive light-cone beams, bright cyan underglow casting light onto the wet road, sweeping **Hot Magenta taillight light-ribbons**, cyan rear-tire skid trails, and stylized drift smoke.
+- **Hero Drift Chase Camera & Procedural Audio** (`CameraRig.cs`, `AudioManager.cs`) — Low-angle chase camera that swings outside the drift to frame the car's side profile and taillight trails, dynamic speed FOV, plus real-time synthesized engine drone, tire screech, boost sweep, checkpoint blips, and retro synth bassline.
 - **Cyberpunk HUD & Live Minimap** (`HUDController.cs`) — Glassmorphic neon panels with live speedometer + color-shifting fill bar, lap & best-lap timers, pulsing `DRIFT x1.0–5.0` combo multiplier, and a live circuit minimap.
 
 ---
